@@ -1,0 +1,26 @@
+# System operacyjny
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Edytory / IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# Node (gdyby w przyszłości doszło npm)
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# Logi i pliki tymczasowe
+*.log
+tmp/
+temp/
+
+# Artefakty weryfikacji / zrzuty ekranu (pliki robocze z prefiksem _)
+_*.png
+_*.html
+_*.js
+*.tmp

@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Symulacja Rynku — diagramy projektu</title>
+  <style>
+    body { font-family: "Segoe UI", Arial, sans-serif; margin: 0; padding: 24px; background: #0f1420; color: #e6ebf5; }
+    h1 { font-size: 22px; }
+    h2 { font-size: 17px; margin-top: 34px; border-bottom: 1px solid #2a3550; padding-bottom: 6px; }
+    p.desc { color: #9aa6bd; font-size: 13px; max-width: 1000px; line-height: 1.55; }
+    .legend { background: #161d2c; border: 1px solid #2a3550; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #c7d0e0; max-width: 900px; }
+    .legend code { background: #1d2638; padding: 1px 6px; border-radius: 4px; }
+    .diagram { background: #0c111c; border: 1px solid #2a3550; border-radius: 10px; padding: 16px; overflow-x: auto; margin-top: 8px; }
+    .mermaid { display: flex; justify-content: center; }
+    .nav { font-size: 13px; color: #9aa6bd; }
+    .nav a { color: #6ea8ff; text-decoration: none; margin-right: 14px; }
+    .fallback { color: #ffd76a; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h1>Symulacja Rynku Giełdowego — diagramy projektu</h1>
+  <p class="desc">
+    Zestaw diagramów dokumentujących program. Schemat główny pokazuje pętlę symulacji z rozgałęzieniami decyzyjnymi,
+    schemat silnika „otwiera czarną skrzynkę” dopasowania zleceń, schemat agentów opisuje logikę każdej strategii,
+    a diagram klas (UML) odwzorowuje rzeczywistą strukturę kodu (klasy w <code>market_simulation.html</code>).
+  </p>
+  <p class="nav">
+    Przejdź do: <a href="#d1">1. Schemat główny</a><a href="#d2">2. Silnik dopasowania</a>
+    <a href="#d3">3. Logika agentów</a><a href="#d4">4. Diagram klas (UML)</a>
+  </p>
+
+  <div class="legend">
+    <b>Legenda symboli:</b>
+    owal <code>([ ])</code> = start / stop &nbsp;•&nbsp;
+    prostokąt <code>[ ]</code> = proces (operacja) &nbsp;•&nbsp;
+    romb <code>{ }</code> = decyzja (rozgałęzienie tak/nie) &nbsp;•&nbsp;
+    prostokąt z paskami <code>[[ ]]</code> = podprogram (osobny diagram) &nbsp;•&nbsp;
+    sześciokąt <code>{{ }}</code> = początek pętli &nbsp;•&nbsp;
+    równoległobok <code>[/ /]</code> = wejście / zdarzenie &nbsp;•&nbsp;
+    krawędź przerywana <code>-.-&gt;</code> = zdarzenie asynchroniczne (poza pętlą).
+  </div>
+
+  <h2 id="d1">1. Schemat główny — pętla symulacji</h2>
+  <p class="desc">
+    Jedna „tura” (co 250 ms): animator rynku uzupełnia płynność, agenci i użytkownik składają zlecenia, silnik dopasowuje
+    je, następuje aktualizacja ceny/wolumenu, BID/ASK/spreadu oraz odświeżenie interfejsu. Zlecenie użytkownika trafia do
+    pętli przez asynchroniczne zdarzenie z formularza (krawędź przerywana).
+  </p>
+  <div class="diagram"><pre class="mermaid">
+flowchart TD
+    Start([Start]) --> I1["Inicjalizacja: ksiega zlecen, cena=100.00,<br/>historia, tick=0, animator rynku + agenci"]
+    I1 --> I2["Utworzenie wykresow i interfejsu"]
+    I2 --> LOOP{{"Petla symulacji — co 250 ms"}}
+
+    subgraph TURA["Pojedyncza tura symulacji"]
+      direction TB
+      INC["tick = tick + 1"]
+      INC --> MM["Animator rynku: uzupelnij plynnosc<br/>na drabinie poziomow (sciany)<br/>liczba/glebokosc/spread wg profilu plynnosci"]
+      MM --> A1["Dla kazdego agenta: wywolaj decyzje act(ctx)"]
+      A1 --> ADEC{"Agent zwrocil zlecenie?"}
+      ADEC -- nie --> AMORE{"Czy sa kolejni agenci?"}
+      ADEC -- tak --> ATYPE{"Typ zlecenia?"}
+      ATYPE -- "z limitem" --> ADD["Dodaj limit do ksiegi<br/>(buduje sciane plynnosci)"]
+      ATYPE -- "rynkowe" --> ENG[["Realizacja zlecenia rynkowego<br/>= patrz Diagram 2"]]
+      ADD --> AMORE
+      ENG --> AMORE
+      AMORE -- tak --> A1
+      AMORE -- nie --> U1{"Czy uzytkownik zlozyl zlecenie?"}
+      U1 -- tak --> UENG[["Realizacja zlecenia uzytkownika<br/>= patrz Diagram 2"]]
+      U1 -- nie --> MATCH[["Dopasowanie skrzyzowanych limitow<br/>(zabezpieczenie) = patrz Diagram 2"]]
+      UENG --> MATCH
+      MATCH --> TR{"Czy zawarto transakcje?"}
+      TR -- tak --> P1["Cena = cena zlecenia spoczywajacego (maklera);<br/>aktualizacja wolumenu"]
+      TR -- nie --> P0["Brak zmiany ceny transakcyjnej"]
+      P1 --> CANCEL["Anulowanie przeterminowanych zlecen<br/>+ limit rozmiaru ksiegi"]
+      P0 --> CANCEL
+      CANCEL --> H1["Aktualizacja historii, profilu glebokosci,<br/>wsparcia/oporu"]
+      H1 --> BAS["Wyznaczenie BID, ASK, spread<br/>(na potrzeby interfejsu)"]
+      BAS --> UI["Odswiezenie: wykres ceny + glebokosc<br/>+ mapa cieplna + tabela + KPI"]
+    end
+
+    LOOP --> INC
+    UI --> CONT{"Czy symulacja trwa dalej?"}
+    CONT -- tak --> LOOP
+    CONT -- nie --> Stop([Stop])
+
+    EVT[/"Zdarzenie: uzytkownik wysyla formularz"/] -.-> SET["Dodaj zlecenie do kolejki uzytkownika"]
+    SET -.-> U1
+  </pre></div>
+
+  <h2 id="d2">2. Silnik dopasowania — „chodzenie po księdze”</h2>
+  <p class="desc">
+    Wspólna procedura dla zleceń agentów, wieloryba i użytkownika. Zlecenie rynkowe konsumuje kolejne poziomy przeciwnej
+    strony księgi (cena „wędruje” do każdego poziomu = cena maklera). Zlecenie z limitem realizuje się tylko dopóki
+    „krzyżuje” swoją cenę, a niezrealizowana reszta zostaje w księdze jako nowa płynność.
+  </p>
+  <div class="diagram"><pre class="mermaid">
+flowchart TD
+    M0(["Wejscie: zlecenie (rynkowe lub z limitem)"]) --> M1{"Strona = kupno?"}
+    M1 -- "kupno (taker)" --> MB["ksiega = ASKS (oferty sprzedazy)"]
+    M1 -- "sprzedaz (taker)" --> MS["ksiega = BIDS (oferty kupna)"]
+    MB --> ML{"ilosc &gt; 0 ORAZ ksiega niepusta?"}
+    MS --> ML
+    ML -- nie --> MLIM{"Zlecenie z limitem i zostala ilosc?"}
+    MLIM -- tak --> MREST["Dodaj reszte do ksiegi<br/>(zlecenie spoczywajace = nowa plynnosc)"]
+    MLIM -- nie --> MEND(["Koniec — cena przeszla przez poziomy"])
+    MREST --> MEND
+    ML -- tak --> MX{"Limit: czy poziom nadal<br/>krzyzuje cene zlecenia?"}
+    MX -- nie --> MLIM
+    MX -- "tak / rynkowe" --> MT["poziom = ksiega[0]<br/>tradeQty = min(ilosc, poziom.ilosc)"]
+    MT --> MP["cena = poziom.cena (cena maklera)<br/>wolumen += tradeQty"]
+    MP --> MR["poziom.ilosc -= tradeQty<br/>ilosc -= tradeQty"]
+    MR --> MRM{"poziom.ilosc &lt;= 0?"}
+    MRM -- tak --> MSHIFT["Usun poziom z ksiegi<br/>(plynnosc skonsumowana)"]
+    MRM -- nie --> ML
+    MSHIFT --> ML
+  </pre></div>
+
+  <h2 id="d3">3. Logika agentów — strategie uczestników rynku</h2>
+  <p class="desc">
+    Każdy typ agenta ma własną regułę decyzyjną. Kluczowa dla realizmu jest przewaga zleceń <b>rynkowych</b> (takerów),
+    które konsumują płynność i poruszają cenę, podczas gdy animator rynku rozkłada zlecenia z limitem na wielu poziomach —
+    tak powstają ściany płynności (pamięć rynku = wsparcie/opór).
+  </p>
+  <div class="diagram"><pre class="mermaid">
+flowchart TD
+    subgraph MMK["Animator rynku (Market Maker)"]
+      direction TB
+      MM0([Tura]) --> MM1["Dla k = 0..(mmLevels-1):<br/>dist = (mmInnerTicks + k)*krok<br/>bid = cena - dist, ask = cena + dist<br/>(cena = ostatnia cena transakcyjna)"]
+      MM1 --> MM2{"Plynnosc na poziomie &lt; cel (mmTargetDepth)?"}
+      MM2 -- tak --> MM3["Dodaj / uzupelnij limit"]
+      MM2 -- nie --> MM4["Pomin poziom"]
+    end
+    subgraph NS["Trader szumowy"]
+      direction TB
+      N0([Tura]) --> N1{"random &lt; 0.5? (aktywny)"}
+      N1 -- nie --> NX([Brak zlecenia])
+      N1 -- tak --> N2["strona = losowo kupno / sprzedaz"]
+      N2 --> N3{"random &lt; 0.80?"}
+      N3 -- tak --> N4([Zlecenie RYNKOWE — konsumuje plynnosc])
+      N3 -- nie --> N5([Limit 1-3 poziomy od ostatniej ceny — pasywnie])
+    end
+    subgraph TF["Podazajacy za trendem"]
+      direction TB
+      T0([Tura]) --> T1{"Historia &gt;= 5 punktow?"}
+      T1 -- nie --> TX([Brak])
+      T1 -- tak --> T2["momentum = suma 5 ostatnich zmian ceny"]
+      T2 --> T3{"p = |momentum| * skala; random &lt; p?"}
+      T3 -- nie --> TX
+      T3 -- tak --> T4{"momentum &gt; 0?"}
+      T4 -- tak --> T5["strona = kupno"]
+      T4 -- nie --> T6["strona = sprzedaz"]
+      T5 --> T7([Zlecenie RYNKOWE 90% — wzmacnia trend])
+      T6 --> T7
+    end
+    subgraph WH["Wieloryb"]
+      direction TB
+      W0([Tura]) --> W1{"random &lt; 0.015? (rzadko)"}
+      W1 -- nie --> WX([Brak])
+      W1 -- tak --> W2["ilosc 40-100;<br/>strona z 60% biasem na trend"]
+      W2 --> W3([Zlecenie RYNKOWE — duzy wplyw, wiele poziomow])
+    end
+  </pre></div>
+
+  <h2 id="d4">4. Diagram klas (UML) — struktura kodu</h2>
+  <p class="desc">
+    Diagram odwzorowuje klasy faktycznie zaimplementowane w programie (nie model „życzeniowy”). Nazwy metod odpowiadają
+    funkcjom w kodzie (<code>executeOrder</code>, <code>addOrder</code>, <code>cancelStale</code>, <code>step</code>),
+    dzięki czemu dokumentacja i kod pozostają spójne.
+  </p>
+  <div class="diagram"><pre class="mermaid">
+classDiagram
+    class Order {
+      +int id
+      +string side
+      +string type
+      +int priceCents
+      +int qty
+      +int bornTick
+      +bool isMM
+    }
+    class OrderBook {
+      +List~Order~ bids
+      +List~Order~ asks
+      +addOrder(o)
+      +bestBid() int
+      +bestAsk() int
+      +spread() int
+      +mid() number
+      +cancelStale(tick)
+      +depthProfile(bin)
+    }
+    class MatchingEngine {
+      +executeOrder(o) Result
+      +clearCrossedBook()
+    }
+    class Agent {
+      &lt;&lt;abstract&gt;&gt;
+      +int id
+      +act(ctx) Order
+    }
+    class MarketMaker {
+      +replenish(ctx) List~Order~
+    }
+    class NoiseTrader
+    class TrendFollower
+    class Whale
+    class Simulation {
+      +OrderBook book
+      +MatchingEngine engine
+      +MarketMaker marketMaker
+      +List~NoiseTrader~ noiseTraders
+      +List~TrendFollower~ trendFollowers
+      +Whale whale
+      +int lastPriceCents
+      +List~int~ history
+      +int tick
+      +step()
+      +reset()
+      +routeOrder(o)
+      +submitUserOrder(o)
+      +fireWhale(side)
+    }
+    class Renderer {
+      +render()
+      +_renderKPI()
+      +_renderPrice()
+      +_renderDepth()
+      +_renderHeatmap()
+      +_renderBook()
+      +_renderStatus()
+    }
+    Agent <|-- MarketMaker
+    Agent <|-- NoiseTrader
+    Agent <|-- TrendFollower
+    Agent <|-- Whale
+    Simulation "1" *-- "1" OrderBook : zawiera
+    Simulation "1" *-- "1" MatchingEngine : zawiera
+    Simulation "1" o-- "*" Agent : steruje
+    OrderBook "1" o-- "*" Order : przechowuje
+    MatchingEngine ..> OrderBook : modyfikuje
+    Renderer ..> Simulation : odczytuje stan
+  </pre></div>
+
+  <p class="fallback" id="fallback" style="display:none">
+    Nie udało się załadować biblioteki Mermaid (brak internetu?). Otwórz ten plik z dostępem do sieci,
+    albo wklej kod diagramów do edytora <b>mermaid.live</b>.
+  </p>
+
+  <script type="module">
+    // Import dynamiczny ładuje się PO zdarzeniu DOMContentLoaded, więc startOnLoad
+    // nie zadziała — renderujemy diagramy jawnie przez mermaid.run().
+    try {
+      const mermaid = (await import('https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs')).default;
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: 'dark',
+        securityLevel: 'loose',
+        flowchart: { htmlLabels: true, curve: 'basis' },
+        themeVariables: { fontSize: '14px' }
+      });
+      await mermaid.run({ querySelector: '.mermaid' });
+    } catch (e) {
+      document.getElementById('fallback').style.display = 'block';
+      console.error('Mermaid load error', e);
+    }
+  </script>
+</body>
+</html>
