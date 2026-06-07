@@ -3,21 +3,21 @@
 
 const CFG = {
 
-  marketSecPerTick: 0.5,
+  marketSecPerTick: 0.05,
   simSpeed: 60,
   maxStepsPerFrame: 1800,
   tickCents: 5,
   startPriceCents: 10000,
 
-  mmLevels: 12,
-  mmTargetDepth: 15,
+  mmLevels: 18,
+  mmTargetDepth: 35,
   mmInnerTicks: 1,
   mmStaleMult: 3,
 
   PACE_PRESETS: {
-    '0.5': { marketSecPerTick: 0.5, mmTargetDepth: 15, mmLevels: 12, mmInnerTicks: 1 },
-    '1':   { marketSecPerTick: 1,   mmTargetDepth: 9,  mmLevels: 11, mmInnerTicks: 1 },
-    '3':   { marketSecPerTick: 3,   mmTargetDepth: 4,  mmLevels: 7,  mmInnerTicks: 3 },
+    '0.05': { marketSecPerTick: 0.05, mmTargetDepth: 35, mmLevels: 18, mmInnerTicks: 1, tvpScale: 3600 },
+    '0.1':  { marketSecPerTick: 0.1,  mmTargetDepth: 18, mmLevels: 13, mmInnerTicks: 1, tvpScale: 900 },
+    '0.5':  { marketSecPerTick: 0.5,  mmTargetDepth: 8,  mmLevels: 8,  mmInnerTicks: 3, tvpScale: 75 },
   },
 
   noiseCount: 6,
@@ -40,12 +40,15 @@ const CFG = {
   whaleButtonMin: 150, whaleButtonMax: 300,
 
   staleSeconds: 60,
-  staleTicks: 120,
+  staleTicks: 1200,
   maxBookPerSide: 600,
-  maxHistory: 3000,
-  maxBaseCandles: 60000,
+  maxHistory: 15000,
+  maxBaseCandles: 200000,
   bookProfWindow: 6000,
   maxVisibleBars: 400,
+  minVisibleBars: 40,
+  defaultVisibleBars: 150,
+  tvpScale: 2000,
 
   heatmapTicks: 150,
   bookHistoryTicks: 600,

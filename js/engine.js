@@ -4,7 +4,7 @@
 class MatchingEngine {
   constructor(book) { this.book = book; }
 
-  executeOrder(order) {
+  executeOrder(order, tradeSink = null) {
     const opp = order.side === 'buy' ? this.book.asks : this.book.bids;
     let qty = order.qty, filled = 0, notional = 0, last = null;
     while (qty > 0 && opp.length > 0) {
@@ -17,6 +17,7 @@ class MatchingEngine {
       lvl.qty -= tq; qty -= tq; filled += tq;
       notional += tq * lvl.priceCents;
       last = lvl.priceCents;
+      if (tradeSink) { const bin = Math.floor(lvl.priceCents / CFG.depthBinCents) * CFG.depthBinCents; tradeSink.set(bin, (tradeSink.get(bin) || 0) + tq); }
       if (lvl.qty <= 0) opp.shift();
     }
 
@@ -25,7 +26,7 @@ class MatchingEngine {
     return { filled, notionalCents: notional, lastTradeCents: last, restedQty: rested };
   }
 
-  clearCrossedBook(refCents) {
+  clearCrossedBook(refCents, tradeSink = null) {
     const b = this.book.bids, a = this.book.asks;
     let filled = 0, last = null;
     while (b.length > 0 && a.length > 0 && b[0].priceCents >= a[0].priceCents) {
@@ -34,6 +35,7 @@ class MatchingEngine {
       const makerPrice = Math.abs(bid.priceCents - ref) <= Math.abs(ask.priceCents - ref) ? bid.priceCents : ask.priceCents;
       const tq = Math.min(bid.qty, ask.qty);
       bid.qty -= tq; ask.qty -= tq; filled += tq; last = makerPrice;
+      if (tradeSink) { const bin = Math.floor(makerPrice / CFG.depthBinCents) * CFG.depthBinCents; tradeSink.set(bin, (tradeSink.get(bin) || 0) + tq); }
       if (bid.qty <= 0) b.shift();
       if (ask.qty <= 0) a.shift();
     }

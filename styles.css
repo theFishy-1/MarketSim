@@ -50,6 +50,7 @@
     .tf-group { display: flex; align-items: center; gap: 14px; }
     .tf { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin: 0; }
     .tf select { padding: 4px 8px; background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; font-size: 12px; }
+    .zoombtn { padding: 1px 8px; font-size: 15px; line-height: 1.2; font-weight: 700; min-width: 26px; }
     #candleCanvas { position: absolute; top: 0; left: 0; height: 100%; }
 
     .chart-wrap { position: relative; height: 320px; }

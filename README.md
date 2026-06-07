@@ -55,18 +55,18 @@ odbija się od jasnych pasm płynności).
 
 Czas symulacji rozdzielono na dwa pokrętła:
 
-- **Tempo rynku** (czas na 1 tick) — ile czasu RYNKU reprezentuje jedna tura/tick. To pokrętło realizmu: domyślnie *płynny/aktywny* = **0,5 s/tick** (≈ kadencja ticków płynnego instrumentu), opcjonalnie 1 s lub 3 s/tick. Drabina interwałów jest z tego **wyliczana** (1m = 60 s, więc 120 tur przy 0,5 s/tick). Ten preset niesie **cały profil płynności**, nie samo tempo — patrz niżej.
+- **Tempo rynku** (czas na 1 tick) — ile czasu RYNKU reprezentuje jedna tura/tick. To pokrętło realizmu: domyślnie *bardzo płynny* = **0,05 s/tick** (~20 aktualizacji/s, jak żywy płynny instrument), opcjonalnie 0,1 s lub 0,5 s/tick. „Tick" to **krok symulacji** (jedna runda agentów), a nie czas między transakcjami — w jednym ticku dzieje się wiele transakcji. Drabina interwałów jest z tego **wyliczana** (1m = 60 s, więc 1200 tur przy 0,05 s/tick). Ten preset niesie **cały profil płynności**, nie samo tempo — patrz niżej.
 
-  **Profil płynności (wielowymiarowy).** Realna (nie)płynność to nie tylko TEMPO transakcji, lecz także **głębokość księgi**, **spread** i **wpływ pojedynczego zlecenia na cenę (impact)**. Dlatego każdy preset ustawia komplet parametrów animatora rynku (`PACE_PRESETS` w `CFG`):
+  **Profil płynności (wielowymiarowy).** Realna (nie)płynność to nie tylko TEMPO transakcji, lecz także **głębokość księgi**, **spread** i **wpływ pojedynczego zlecenia na cenę (impact)**. Kluczowe: *płynny rynek = szybsze ticki ORAZ głębsza księga* — gęstsza płynność wchłania większy napływ, więc cena pozostaje spokojna. Dlatego każdy preset ustawia komplet parametrów animatora rynku (`PACE_PRESETS` w `CFG`):
 
-  | Preset | s/tick | Głębokość/poziom | Poziomy | Spread MM | Efekt |
+  | Preset | s/tick | Głębokość/poziom | Poziomy | Spread | Efekt (zmierzone) |
   |---|---|---|---|---|---|
-  | Płynny / aktywny | 0,5 | 15 | 12 | 1 tick | gęsta księga, wąski spread, ~6 transakcji/s, mały impact |
-  | Standardowy | 1 | 9 | 11 | 1 tick | średnia księga, ~3 transakcje/s |
-  | Mało płynny | 3 | 4 | 7 | 3 ticki | **cienka księga, szeroki spread (~6×), ~1 transakcja/s, duży impact i zmienność** |
+  | Bardzo płynny | 0,05 | 35 | 18 | ~5¢ | ~20 akt./s, ~254 szt/s, **niski impact, spokojna cena** |
+  | Średnio płynny | 0,1 | 18 | 13 | ~5¢ | ~10 akt./s, ~137 szt/s, średnia księga |
+  | Mało płynny | 0,5 | 8 | 8 | ~20¢ | ~2 akt./s, ~36 szt/s, **cienka księga, szeroki spread, duże skoki ceny** |
 
-  Dzięki temu „mało płynny" naprawdę zachowuje się jak instrument niepłynny (cienki arkusz, szerszy spread, większe skoki ceny na zlecenie), a nie jak ten sam przepływ rozciągnięty w czasie.
-- **Tempo symulacji** (czas rynku / s) — ile czasu rynku **odtwarzamy na 1 sekundę zegara** (kompresja). Pętla wykonuje wiele tur na klatkę i rysuje raz na klatkę. Suwak jest logarytmiczny, a jego **maksimum jest realnie osiągalne** (ograniczone limitem kroków na klatkę, by nie „ścinało”): przy 0,5 s/tick do ~15 godz/s, a przy grubszym Tempie rynku (np. 3 s/tick) do ~kilku dni/s — bo wtedy jeden krok to więcej czasu rynku. Aby szybko przewijać dni/tygodnie, wybierz grubsze **Tempo rynku**. Obok suwaka widać **rzeczywiście** osiągane tempo (i „limit wydajności”, gdy maszyna nie nadąża).
+  Dzięki temu „mało płynny" naprawdę zachowuje się jak instrument niepłynny (cienki arkusz, szerszy spread, większe skoki ceny na zlecenie), a „bardzo płynny" jak żywy, gęsty rynek — a nie ten sam przepływ rozciągnięty/ściśnięty w czasie.
+- **Tempo symulacji** (czas rynku / s) — ile czasu rynku **odtwarzamy na 1 sekundę zegara** (kompresja). Pętla wykonuje wiele tur na klatkę i rysuje raz na klatkę. Suwak jest logarytmiczny, a jego **maksimum jest realnie osiągalne** (ograniczone limitem kroków na klatkę, by nie „ścinało”): przy 0,05 s/tick do ~1,5 godz/s, a przy grubszym Tempie rynku (np. 0,5 s/tick) do ~15 godz/s — bo wtedy jeden krok to więcej czasu rynku. Aby szybko przewijać godziny/dni, wybierz grubsze **Tempo rynku**. Obok suwaka widać **rzeczywiście** osiągane tempo (i „limit wydajności”, gdy maszyna nie nadąża).
 
 KPI **Czas rynku** pokazuje, ile czasu rynku upłynęło (np. `3 d 04:12`) oraz numer tury.
 
@@ -75,8 +75,13 @@ KPI **Czas rynku** pokazuje, ile czasu rynku upłynęło (np. `3 d 04:12`) oraz 
 - **Start / Pauza / Reset** oraz przełączniki agentów (Szum / Trend / Wieloryb).
 - **Formularz zleceń** (kupno/sprzedaż, rynkowe/z limitem, ilość) oraz przycisk **Zlecenie wieloryba** — pokazują wpływ zlecenia na cenę.
 - **Typ wykresu:** linia lub **świece OHLC**.
-- **Interwał:** 1 tick, 1s, 5s, 15s, 1m, 5m, 15m, 1h, 4h, 1D. Skala jest spójna i zmiana **nie resetuje** symulacji. Interwały **poniżej 1 minuty** rysowane są z surowych ticków (okno przewijane ~3000 tur). Interwały **od 1 minuty** agregują się z trwałych **świec 1-minutowych** (do ~42 dni historii), więc 15m/1h/4h/1D gromadzą prawdziwe, stabilne świece i **wypełniają** wykres, a niekompletna najstarsza świeca jest pomijana (nie „pełza”). Zakończone świece nigdy się nie zmieniają — aktualizuje się tylko ostatnia, formująca się.
+- **Zoom** (przyciski −/+ obok kontrolek wykresu lub **kółko myszy** nad wykresem) — przybliża/oddala wykres ceny (pokazuje mniej/więcej najnowszych świec). Przydatne, gdy po dłuższym czasie świece robią się ciasne.
+- **Interwał:** 1 tick, 1s, 5s, 15s, 1m, 5m, 15m, 1h, 4h, 1D, 1T (tydzień), 1Mc (miesiąc). Skala jest spójna i zmiana **nie resetuje** symulacji. Interwały drobniejsze niż 1 tick są **ukrywane** (np. przy „mało płynnym" = 2 s/tick znika „1s", bo zlałoby się z „1 tick" i dawało świece bez ciała); opcja „1 tick" pokazuje realny czas ticka, np. `1 tick (2 s)`. Interwały **poniżej 1 minuty** rysowane są z surowych ticków (okno przewijane ~3000 tur). Interwały **od 1 minuty** agregują się z trwałych **świec 1-minutowych** (do ~42 dni historii), więc 15m/1h/4h/1D gromadzą prawdziwe, stabilne świece i **wypełniają** wykres, a niekompletna najstarsza świeca jest pomijana (nie „pełza”). Zakończone świece nigdy się nie zmieniają — aktualizuje się tylko ostatnia, formująca się.
 - **Księga** (nakładka na wykres ceny): **historia księgi** — poziome linie zleceń (zielone = kupno, czerwone = sprzedaż), których **przezroczystość zależy od rozmiaru** zlecenia. Migawki księgi zapisywane są przy świecach bazowych, więc nakładka pokrywa **cały wykres** i nie znika. Dodatkowo **żywa głębokość** (DOM) jako słupki przy prawej krawędzi.
+- **Nakładka** (tryb historii księgi) — przełącznik *co* pokazuje nakładka:
+  - **Spoczynek + ślad** (domyślnie): ściany **spoczywających** (niezrealizowanych) zleceń jak wyżej, ze **złoto-kremowym śladem** na tych poziomach, na których naprawdę doszło do transakcji. Pozwala odróżnić ściany „przetestowane" (realne wsparcie/opór) od czysto potencjalnych, ciągle odnawianych przez animatora.
+  - **Wolumen**: czysty **profil wolumenu** (ang. *volume profile*) — ile **zrealizowanego** wolumenu przypadło na każdy poziom ceny. Jasne pasma to węzły wysokiego wolumenu (obszary wartości / *point of control*), w których rynek „spędził czas". To uzupełniające spojrzenie: *gdzie płynność czeka* (spoczynek) kontra *gdzie naprawdę handlowano* (wolumen).
+  - Nakładka (oba tryby) jest **dokładna od interwału ≥ 1m** — dane księgi/wolumenu są zbierane raz na minutę rynku. Na interwałach sub-minutowych nakładka nie jest rysowana (zamiast tego krótka podpowiedź), a żywą płynność widać w panelu „Mapa płynności w czasie". Dlatego domyślny interwał to **1m**.
 
 ## Struktura kodu
 

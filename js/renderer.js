@@ -9,6 +9,8 @@ class Renderer {
     this.timeframe = 1;
     this.chartType = 'line';
     this.showBook = true;
+    this.bookMode = 'rest';
+    this.visibleBars = CFG.defaultVisibleBars;
     this.depth = this._setupCanvas('depthCanvas', 300);
     this.heat = this._setupCanvas('heatCanvas', 260);
     this.candle = this._setupCanvas('candleCanvas', this._candleHeight());
@@ -172,7 +174,7 @@ class Renderer {
     if (!all.length && !cur) return [];
     const tfMin = Math.max(1, Math.round(tf / baseTicks));
     const lastM = cur ? cur.m : all[all.length - 1].m;
-    const minM = (Math.floor(lastM / tfMin) - CFG.maxVisibleBars + 1) * tfMin;
+    const minM = (Math.floor(lastM / tfMin) - this.visibleBars + 1) * tfMin;
     const baseM0 = all.length ? all[0].m : cur.m;
     let startIdx = Math.max(0, minM - baseM0);
 
@@ -195,7 +197,7 @@ class Renderer {
     if (n === 0) return [];
     const firstAbs = this.sim.tick - (n - 1);
     const lastBucket = Math.floor((firstAbs + n - 1) / tf);
-    let startI = Math.max(0, (lastBucket - CFG.maxVisibleBars + 1) * tf - firstAbs);
+    let startI = Math.max(0, (lastBucket - this.visibleBars + 1) * tf - firstAbs);
 
     const firstFull = (tf - (firstAbs % tf)) % tf;
     if (firstFull > startI && firstFull < n) startI = firstFull;
@@ -216,21 +218,63 @@ class Renderer {
   }
 
   setShowBook(v) { this.showBook = !!v; this._renderPrice(); }
+  setBookMode(m) { this.bookMode = (m === 'volume') ? 'volume' : 'rest'; this._renderPrice(); }
+  zoom(factor) {
+    this.visibleBars = Math.round(clamp(this.visibleBars * factor, CFG.minVisibleBars, CFG.maxVisibleBars));
+    this._renderPrice();
+  }
 
   _bookByBucket() {
     const tf = this.timeframe || 1;
     const baseTicks = Math.max(1, Math.round(60 / CFG.marketSecPerTick));
     const all = this.sim.baseCandles, cur = this.sim._curBase, m = new Map();
+    // Aggregate (SUM) the per-minute book snapshots in each bucket, tracking the count `n`, so the
+    // drawer can show AVERAGE depth/price over the period. (Overwriting kept only the last minute →
+    // bands clustered at each candle's close on high TFs.) At 1m (tfMin=1) n=1 ⇒ unchanged.
+    const addInto = (bucket, prof) => {
+      if (!prof) return;
+      let acc = m.get(bucket); if (!acc) { acc = { bids: new Map(), asks: new Map(), n: 0 }; m.set(bucket, acc); }
+      acc.n++;
+      const b = prof.bids; for (let k = 0; k < b.length; k += 2) acc.bids.set(b[k], (acc.bids.get(b[k]) || 0) + b[k + 1]);
+      const a = prof.asks; for (let k = 0; k < a.length; k += 2) acc.asks.set(a[k], (acc.asks.get(a[k]) || 0) + a[k + 1]);
+    };
+    if (tf >= baseTicks) {
+      const tfMin = Math.max(1, Math.round(tf / baseTicks));
+      for (let i = Math.max(0, all.length - CFG.bookProfWindow); i < all.length; i++)
+        if (all[i].prof) addInto(Math.floor(all[i].m / tfMin), all[i].prof);
+      if (cur && cur.prof) addInto(Math.floor(cur.m / tfMin), cur.prof);
+    } else {
+
+      const need = Math.ceil(CFG.maxHistory / baseTicks) + 2, start = Math.max(0, all.length - need);
+      const span = bc => { if (!bc.prof) return; const t0 = bc.m * baseTicks, b0 = Math.floor(t0 / tf), b1 = Math.floor((t0 + baseTicks - 1) / tf); for (let b = b0; b <= b1; b++) addInto(b, bc.prof); };
+      for (let i = start; i < all.length; i++) span(all[i]);
+      if (cur) span(cur);
+    }
+    return m;
+  }
+
+  _tvpByBucket() {
+    const tf = this.timeframe || 1;
+    const baseTicks = Math.max(1, Math.round(60 / CFG.marketSecPerTick));
+    const all = this.sim.baseCandles, cur = this.sim._curBase, m = new Map();
+    // Per bucket: SUM traded volume per price + count `n` minutes, so the drawer normalises to avg
+    // volume/min (keeps opacity in the per-minute `tvpScale` range across timeframes). `n` counts every
+    // in-window minute (incl. zero-trade ones) so the average isn't biased high.
+    const addInto = (bucket, arr) => {
+      let acc = m.get(bucket); if (!acc) { acc = { map: new Map(), n: 0 }; m.set(bucket, acc); }
+      acc.n++;
+      if (arr) for (let k = 0; k < arr.length; k += 2) acc.map.set(arr[k], (acc.map.get(arr[k]) || 0) + arr[k + 1]);
+    };
     if (tf >= baseTicks) {
       const tfMin = Math.max(1, Math.round(tf / baseTicks));
 
       for (let i = Math.max(0, all.length - CFG.bookProfWindow); i < all.length; i++)
-        if (all[i].prof) m.set(Math.floor(all[i].m / tfMin), all[i].prof);
-      if (cur && cur.prof) m.set(Math.floor(cur.m / tfMin), cur.prof);
+        if (all[i].tvp) addInto(Math.floor(all[i].m / tfMin), all[i].tvp);
+      if (cur && cur.tvp) addInto(Math.floor(cur.m / tfMin), cur.tvp);
     } else {
 
       const need = Math.ceil(CFG.maxHistory / baseTicks) + 2, start = Math.max(0, all.length - need);
-      const span = bc => { if (!bc.prof) return; const t0 = bc.m * baseTicks, b0 = Math.floor(t0 / tf), b1 = Math.floor((t0 + baseTicks - 1) / tf); for (let b = b0; b <= b1; b++) m.set(b, bc.prof); };
+      const span = bc => { if (!bc.tvp) return; const t0 = bc.m * baseTicks, b0 = Math.floor(t0 / tf), b1 = Math.floor((t0 + baseTicks - 1) / tf); for (let b = b0; b <= b1; b++) addInto(b, bc.tvp); };
       for (let i = start; i < all.length; i++) span(all[i]);
       if (cur) span(cur);
     }
@@ -238,24 +282,53 @@ class Renderer {
   }
 
   _drawBookHistory(ctx, g) {
-    const byB = this._bookByBucket(), scale = CFG.mmTargetDepth;
+    const baseTicks = Math.max(1, Math.round(60 / CFG.marketSecPerTick));
+    // Overlay data (resting prof + traded volume) is captured per market-minute; below 1m it would
+    // smear one minute's profile across every sub-candle → staircase blocks. Hide it silently.
+    if (this.timeframe < baseTicks) return;
+    if (this.bookMode === 'volume') { this._drawTradedVolume(ctx, g); return; }
+    const byB = this._bookByBucket(), tvpB = this._tvpByBucket(), scale = CFG.mmTargetDepth;
 
     const gap = Math.abs(g.yFn(0) - g.yFn(CFG.depthBinCents));
-    const th = Math.max(1, Math.min(2.5, gap * 0.4));
+    const th = Math.max(1, gap * 0.9);
     for (let i = 0; i < g.candles.length; i++) {
       const prof = byB.get(g.candles[i].b); if (!prof) continue;
-      const x0 = g.xLeft(i);
+      const x0 = g.xLeft(i), tvp = tvpB.get(g.candles[i].b);
+      const pn = prof.n || 1, tn = tvp ? (tvp.n || 1) : 1;
 
-      const paint = (arr, r, gr, b) => {
-        for (let k = 0; k < arr.length; k += 2) {
-          const p = arr[k]; if (p < g.loC || p > g.hiC) continue;
-          const a = clamp(0.06 + (arr[k + 1] / scale) * 0.6, 0.06, 0.85);
+      const paint = (map, r, gr, b) => {
+        for (const [p, q] of map) {
+          if (p < g.loC || p > g.hiC) continue;
+          const yy = g.yFn(p) - th / 2;
+          const a = clamp(0.06 + ((q / pn) / scale) * 0.6, 0.06, 0.85);
           ctx.fillStyle = 'rgba(' + r + ',' + gr + ',' + b + ',' + a + ')';
-          ctx.fillRect(x0, g.yFn(p) - th / 2, g.colW, th);
+          ctx.fillRect(x0, yy, g.colW, th);
+          const traded = tvp ? (tvp.map.get(p) || 0) / tn : 0;
+          if (traded) {
+            const ta = clamp((traded / CFG.tvpScale) * 0.75, 0.05, 0.8);
+            ctx.fillStyle = 'rgba(255,240,170,' + ta + ')';
+            ctx.fillRect(x0, yy, g.colW, th);
+          }
         }
       };
       paint(prof.bids, 45, 195, 105);
       paint(prof.asks, 230, 72, 72);
+    }
+  }
+
+  _drawTradedVolume(ctx, g) {
+    const tvpB = this._tvpByBucket();
+    const gap = Math.abs(g.yFn(0) - g.yFn(CFG.depthBinCents));
+    const th = Math.max(1, gap * 0.9);
+    for (let i = 0; i < g.candles.length; i++) {
+      const e = tvpB.get(g.candles[i].b); if (!e) continue;
+      const x0 = g.xLeft(i), n = e.n || 1;
+      for (const [p, q] of e.map) {
+        if (p < g.loC || p > g.hiC) continue;
+        const a = clamp(0.05 + ((q / n) / CFG.tvpScale) * 0.7, 0.05, 0.9);
+        ctx.fillStyle = 'rgba(240,200,0,' + a + ')';
+        ctx.fillRect(x0, g.yFn(p) - th / 2, g.colW, th);
+      }
     }
   }
 
@@ -303,14 +376,27 @@ class Renderer {
 
     if (this.showBook) this._drawBookHistory(ctx, { candles, xLeft: i => xOff + i * slot, colW: Math.ceil(slot) + 0.5, yFn: y, loC: lo, hiC: hi });
 
-    const bodyW = Math.max(1, Math.min(slot * 0.7, 16));
-    for (let i = 0; i < n; i++) {
-      const k = candles[i], x = xOff + i * slot + slot / 2, up = k.c >= k.o;
-      const col = up ? '#3fcf72' : '#ff5b5b';
-      ctx.strokeStyle = col; ctx.fillStyle = col;
-      ctx.beginPath(); ctx.moveTo(x, y(k.h)); ctx.lineTo(x, y(k.l)); ctx.stroke();
-      const yo = y(k.o), yc = y(k.c), top = Math.min(yo, yc), bh = Math.max(1, Math.abs(yc - yo));
-      ctx.fillRect(x - bodyW / 2, top, bodyW, bh);
+    if (this.timeframe === 1) {
+      // 1 tick = surowy wykres tików: każda „świeca" to 1 tick (open≈close, brak ciała) → rysuj linię, nie zdegenerowane świece
+      ctx.lineWidth = 1.5;
+      for (let i = 1; i < n; i++) {
+        const a = candles[i - 1], k = candles[i];
+        ctx.strokeStyle = k.c >= a.c ? '#3fcf72' : '#ff5b5b';
+        ctx.beginPath();
+        ctx.moveTo(xOff + (i - 1) * slot + slot / 2, y(a.c));
+        ctx.lineTo(xOff + i * slot + slot / 2, y(k.c));
+        ctx.stroke();
+      }
+    } else {
+      const bodyW = Math.max(1, Math.min(slot * 0.7, 16));
+      for (let i = 0; i < n; i++) {
+        const k = candles[i], x = xOff + i * slot + slot / 2, up = k.c >= k.o;
+        const col = up ? '#3fcf72' : '#ff5b5b';
+        ctx.strokeStyle = col; ctx.fillStyle = col;
+        ctx.beginPath(); ctx.moveTo(x, y(k.h)); ctx.lineTo(x, y(k.l)); ctx.stroke();
+        const yo = y(k.o), yc = y(k.c), top = Math.min(yo, yc), bh = Math.max(1, Math.abs(yc - yo));
+        ctx.fillRect(x - bodyW / 2, top, bodyW, bh);
+      }
     }
 
     const hline = (cents, color, dash) => {

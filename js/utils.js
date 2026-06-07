@@ -17,9 +17,13 @@ function fmtMarketTime(sec) {
   return d > 0 ? d + ' d ' + p2(h) + ':' + p2(m) : h > 0 ? p2(h) + ':' + p2(m) + ':' + p2(s) : p2(m) + ':' + p2(s);
 }
 
+function compactMap(map, center, W) {
+  const out = [];
+  for (const [p, q] of map) if (Math.abs(p - center) <= W) out.push(p, q);
+  return out;
+}
 function compactProf(prof, center, W) {
-  const f = map => { const out = []; for (const [p, q] of map) if (Math.abs(p - center) <= W) out.push(p, q); return out; };
-  return { bids: f(prof.bids), asks: f(prof.asks) };
+  return { bids: compactMap(prof.bids, center, W), asks: compactMap(prof.asks, center, W) };
 }
 const snapToTick = c => Math.round(c / CFG.tickCents) * CFG.tickCents;
 function expSample(mean) { let u = Math.random(); if (u <= 0) u = 1e-9; return -mean * Math.log(u); }

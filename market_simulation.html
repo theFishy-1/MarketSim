@@ -43,6 +43,16 @@
             <select id="timeframe"></select>
           </label>
           <label class="tf"><input type="checkbox" id="showBook" checked /> Księga</label>
+          <label class="tf">Nakładka
+            <select id="bookMode" title="Spoczynek + ślad: ściany spoczywających zleceń (zielony popyt / czerwona podaż) ze złotym śladem rzeczywiście zrealizowanego wolumenu. Wolumen: czysty profil zrealizowanego wolumenu wg ceny.">
+              <option value="rest">Spoczynek + ślad</option>
+              <option value="volume">Wolumen</option>
+            </select>
+          </label>
+          <span class="tf" title="Przybliżanie wykresu (możesz też kółkiem myszy nad wykresem)">Zoom
+            <button type="button" class="zoombtn" id="zoomOut" title="Oddal">−</button>
+            <button type="button" class="zoombtn" id="zoomIn" title="Przybliż">+</button>
+          </span>
         </div>
       </div>
       <div class="chart-wrap">
@@ -72,13 +82,13 @@
         <button id="btnReset">Reset</button>
       </div>
       <label>Tempo symulacji (czas rynku / s): <span id="simSpeedLabel"></span></label>
-      <input type="range" id="simSpeed" min="0" max="1000" step="1" value="376" style="width:100%" />
+      <input type="range" id="simSpeed" min="0" max="1000" step="1" value="440" style="width:100%" />
       <div class="status" id="speedReadout" style="min-height:0;margin-top:2px"></div>
       <label>Tempo rynku (czas na 1 tick)</label>
       <select id="marketPace">
-        <option value="0.5" selected>Płynny / aktywny (0,5 s/tick — gęsta księga, wąski spread)</option>
-        <option value="1">Standardowy (1 s/tick — średnia księga)</option>
-        <option value="3">Mało płynny (3 s/tick — cienka księga, szeroki spread)</option>
+        <option value="0.05" selected>Bardzo płynny (0,05 s/tick — ~20 akt./s, bardzo gęsta księga, wąski spread)</option>
+        <option value="0.1">Średnio płynny (0,1 s/tick — średnia księga)</option>
+        <option value="0.5">Mało płynny (0,5 s/tick — cienka księga, szeroki spread, duże skoki)</option>
       </select>
       <div class="toggles">
         <label><input type="checkbox" id="tgNoise" checked /> Traderzy szumowi</label>

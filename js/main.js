@@ -65,27 +65,41 @@
     simSpeedEl.addEventListener('input', e => applySimSpeed(parseInt(e.target.value, 10)));
 
     function applyPace(value) {
-      const p = CFG.PACE_PRESETS[value] || CFG.PACE_PRESETS['0.5'];
+      const p = CFG.PACE_PRESETS[value] || CFG.PACE_PRESETS['0.05'];
       CFG.marketSecPerTick = p.marketSecPerTick;
       CFG.mmTargetDepth = p.mmTargetDepth;
       CFG.mmLevels = p.mmLevels;
       CFG.mmInnerTicks = p.mmInnerTicks;
+      CFG.tvpScale = p.tvpScale;
       CFG.staleTicks = Math.max(1, Math.round(CFG.staleSeconds / CFG.marketSecPerTick));
     }
     applyPace(document.getElementById('marketPace').value);
     applySimSpeed(parseInt(simSpeedEl.value, 10));
 
     const TF_DEFS = [['1 tick', null], ['1s', 1], ['5s', 5], ['15s', 15], ['1m', 60],
-                     ['5m', 300], ['15m', 900], ['1h', 3600], ['4h', 14400], ['1D', 86400]];
+                     ['5m', 300], ['15m', 900], ['1h', 3600], ['4h', 14400], ['1D', 86400],
+                     ['1T', 604800], ['1Mc', 2592000]];
     function rebuildTimeframeOptions() {
       const sel = document.getElementById('timeframe');
-      const idx = Math.max(0, sel.selectedIndex);
+      const cur = sel.options[sel.selectedIndex];
+      const prevTf = cur ? cur.dataset.tf : null;
       sel.innerHTML = '';
+      const seen = new Set();
       for (const [label, sec] of TF_DEFS) {
         const ticks = sec === null ? 1 : Math.max(1, Math.round(sec / CFG.marketSecPerTick));
+
+        if (seen.has(ticks)) continue;
+        seen.add(ticks);
         const o = document.createElement('option');
-        o.value = String(ticks); o.textContent = label;
+        o.value = String(ticks); o.dataset.tf = label;
+        o.textContent = sec === null ? ('1 tick (' + CFG.marketSecPerTick + ' s)') : label;
         sel.appendChild(o);
+      }
+      let idx = prevTf ? Array.from(sel.options).findIndex(o => o.dataset.tf === prevTf) : -1;
+      if (idx < 0) {
+        const baseTicks = Math.max(1, Math.round(60 / CFG.marketSecPerTick));
+        idx = Array.from(sel.options).findIndex(o => parseInt(o.value, 10) >= baseTicks);
+        if (idx < 0) idx = sel.options.length - 1;
       }
       sel.selectedIndex = idx;
       sel.title = '1 tura ≈ ' + CFG.marketSecPerTick + ' s czasu rynku';
@@ -106,6 +120,13 @@
     document.getElementById('chartType').addEventListener('change', e => renderer.setChartType(e.target.value));
 
     document.getElementById('showBook').addEventListener('change', e => renderer.setShowBook(e.target.checked));
+
+    document.getElementById('bookMode').addEventListener('change', e => renderer.setBookMode(e.target.value));
+
+    document.getElementById('zoomIn').addEventListener('click', () => renderer.zoom(0.7));
+    document.getElementById('zoomOut').addEventListener('click', () => renderer.zoom(1.43));
+    const chartWrap = document.querySelector('.chart-wrap');
+    if (chartWrap) chartWrap.addEventListener('wheel', e => { e.preventDefault(); renderer.zoom(e.deltaY < 0 ? 0.85 : 1.18); }, { passive: false });
 
     document.getElementById('tgNoise').addEventListener('change', e => sim.enableNoise = e.target.checked);
     document.getElementById('tgTrend').addEventListener('change', e => sim.enableTrend = e.target.checked);
